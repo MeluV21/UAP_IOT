@@ -1,0 +1,85 @@
+#define BLYNK_PRINT Serial
+
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+
+// === CREDENTIALS BLYNK DAN WIFI ===
+char auth[] = "ISI_DENGAN_BLYNK_AUTH_TOKEN";
+char ssid[] = "ISI_DENGAN_NAMA_WIFI";
+char pass[] = "ISI_DENGAN_PASSWORD_WIFI";
+
+// === PIN DEFINITIONS ===
+#define BUZZER_PIN D1
+#define LED_PIN    D2
+#define TRIG_PIN   D5
+#define ECHO_PIN   D6
+
+// === GLOBAL VARIABLES ===
+long duration;
+int distance;
+
+BlynkTimer timer; // Untuk mengatur interval kirim data
+
+// === HELPER FUNCTION ===
+void aksiSensor(int jeda) {
+  digitalWrite(LED_PIN, HIGH);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(100);
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+  delay(jeda);
+}
+
+// === MENGHITUNG JARAK & KIRIM KE BLYNK ===
+void kirimJarakKeBlynk() {
+  // Trigger sensor
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // Baca waktu pantulan
+  duration = pulseIn(ECHO_PIN, HIGH);
+  distance = duration * 0.034 / 2;
+
+  Serial.print("Jarak: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  // Kirim ke Blynk (Virtual Pin V0)
+  Blynk.virtualWrite(V0, distance);
+
+  // Zona logika
+  if (distance < 5 && distance > 0) {
+    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(BUZZER_PIN, HIGH);
+    Blynk.virtualWrite(V1, "Bahaya");
+  } else if (distance >= 5 && distance <= 50) {
+    int jeda = map(distance, 5, 50, 50, 700);
+    aksiSensor(jeda);
+    Blynk.virtualWrite(V1, "Waspada");
+  } else {
+    digitalWrite(LED_PIN, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
+    Blynk.virtualWrite(V1, "Aman");
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  Blynk.begin(auth, ssid, pass);
+
+  timer.setInterval(1000L, kirimJarakKeBlynk); // Setiap 1 detik kirim data
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
